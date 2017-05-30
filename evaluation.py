@@ -53,22 +53,22 @@ def tClusterMatchNews_content(tWords, goldNews):
         if len(mandMatched) == len(mandWords):
             matchedNews_c.append(newsIdx)
             kpre_val = (len(commonWithMand) + len(commonWithOpt))*1.0/len(tWords)
-            krec_val = (len(commonWithMand) + len(commonWithOpt))*1.0/(len(mandWords) + len(optWords))
+            krec_val = (len(mandMatched) + len(commonWithOpt))*1.0/(len(mandWords) + len(optWords))
             kpre.append(kpre_val)
             krec.append(krec_val)
-            print len(mandWords),len(optWords), len(commonWithMand), len(commonWithOpt), kpre_val, krec_val
+            print len(mandWords),len(optWords), len(mandMatched), len(commonWithOpt), kpre_val, krec_val
             print commonWithMand
 
     if len(matchedNews_c) == 0:
         return None, None, None
     return matchedNews_c, kpre, krec
 
-def evalTClusters(tweetClusters, goldNews, outputDetail):
+def evalTClusters(tweetClusters, goldNews, outputDetail, topK_c):
     trueCluster = []
     matchedNews = []
     kpreArr = []
     krecArr = []
-    for outIdx, cluster in enumerate(tweetClusters):
+    for outIdx, cluster in enumerate(tweetClusters[:min(topK_c, len(tweetClusters))]):
         #cWords = cluster.lower().split(", ")
         cWords = cluster.lower().split(" ")
 
@@ -95,69 +95,6 @@ def evalTClusters(tweetClusters, goldNews, outputDetail):
     return len(trueCluster), len(matchedNews), kpreArr, krecArr
 
 
-def outputEval(Nums):
-    print "## Eval newsMatchedCluster", sum(Nums[0]), sum(Nums[1]), round(float(sum(Nums[0])*100)/sum(Nums[1]), 2)
-    print "## Eval sysMatchedNews", sum(Nums[2]), sum(Nums[3]), round(float(sum(Nums[2])*100)/sum(Nums[3]), 2)
-
-def outputEval_day(Nums):
-    print "## newsPre", Nums[0][-1], Nums[1][-1], ("%.2f" %(Nums[0][-1]*100.0/Nums[1][-1])), "\t",
-    print "## newsRecall", Nums[2][-1], Nums[3][-1], "\t", round(float(Nums[2][-1]*100)/Nums[3][-1], 2)
-
-
-def evalOutputFAEvents(dayClusters, outputDays, devDays, testDays, topK_c, Kc_step, goldFA):
-    outputDetail = False
-
-    for sub_topK_c in range(Kc_step, topK_c+1, Kc_step):
-        print "KC", sub_topK_c
-        if sub_topK_c == topK_c: outputDetail = True
-
-        dev_Nums = [[], [], [], []] # trueCNums, cNums, matchNNums, nNums 
-        test_Nums = [[], [], [], []]
-        for cItem in dayClusters:
-            if cItem is None: continue
-            day, texts_day, dataset_day, tweetClusters = cItem
-            if tweetClusters is None: continue
-            if day not in outputDays: continue
-
-            sub_tweetClusters = tweetClusters[:sub_topK_c]
-            goldNews = [item[1] for item in goldFA if item[0] == day]
-
-            if outputDetail:
-                print "## News in day", day
-                for item in goldNews:
-                    print item
-                print "## Output details of Clusters in day", day
-
-            trueCNum, matchNNum, kpreArr, krecArr = evalTClusters(sub_tweetClusters, texts_day, goldNews, outputDetail)
-            print "## Keyword pre, rec", np.mean(kpreArr), np.mean(krecArr)
-
-            if day in devDays:
-                dev_Nums[0].append(trueCNum)
-                dev_Nums[1].append(len(sub_tweetClusters))
-                dev_Nums[2].append(matchNNum)
-                dev_Nums[3].append(len(goldNews))
-                if trueCNum > 0:
-                    outputEval_day(dev_Nums)
-            if day in testDays:
-                test_Nums[0].append(trueCNum)
-                test_Nums[1].append(len(sub_tweetClusters))
-                test_Nums[2].append(matchNNum)
-                test_Nums[3].append(len(goldNews))
-                if trueCNum > 0:
-                    outputEval_day(test_Nums)
-                
-        ##############
-
-        ##############
-        # output evaluation metrics_recall
-        if sum(dev_Nums[1]) > 0:
-            print "** Dev exp in topK_c", sub_topK_c
-            outputEval(dev_Nums)
-        if sum(test_Nums[1]) > 0:
-            print "** Test exp in topK_c", sub_topK_c
-            outputEval(test_Nums)
-        ##############
-
 def loadGold(filename):
     gold_topics = {}
     for item in os.listdir(filename): # eg_item = 7_11_2012_0_0.txt
@@ -175,7 +112,7 @@ def loadAggTopics(filename, gold_TW):
         arr = aggTopics[lineIdx].split("\t")
         #(_datetime, headline, words, tweetids, pictures) = arr
         timeWindow = arr[0].split(" ")[1] # 07-11-2012 20:20
-        if not arr[0].startswith("07-11-2012"): continue
+        #if not arr[0].startswith("07-11-2012"): continue  # for use
         timeWindow = "_".join([str(int(timeItem)) for timeItem in timeWindow.split(":")])
         if timeWindow not in gold_TW: continue
 
@@ -188,7 +125,7 @@ def loadAggTopics(filename, gold_TW):
     return sysTopics
 
 
-def evalResult(sysTopics, gold_topics):
+def evalResult(sysTopics, gold_topics, topK_c):
     evalMetrics = []
     for timeWindow in sorted(sysTopics.keys()):
         tr = 0.0
@@ -210,7 +147,7 @@ def evalResult(sysTopics, gold_topics):
             mandWords, optWords = extractNewsWords(item)
             print "Gold", mandWords, optWords
 
-        trueCNum, matchNNum, kpreArr, krecArr = evalTClusters(topics, gold_topics_tw, True)
+        trueCNum, matchNNum, kpreArr, krecArr = evalTClusters(topics, gold_topics_tw, True, topK_c)
 
         tr = matchNNum*1.0/len(gold_topics_tw)
         if len(kpreArr) > 0: kp = np.mean(kpreArr)
@@ -233,5 +170,8 @@ if __name__ == "__main__":
     # load output of aggED
     sysTopics = loadAggTopics(sys.argv[1], gold_TW)
 
+    print "------------------------------ Evaluation on top2"
+    evalResult(sysTopics, gold_topics, 2)
 
-    evalResult(sysTopics, gold_topics)
+    print "------------------------------ Evaluation on All"
+    evalResult(sysTopics, gold_topics, 10)

@@ -13,8 +13,8 @@ ids = [item.strip() for item in ids]
 
 file_tweets = open(tweetfilename, "r").readlines()
 for lineIdx, line in enumerate(file_tweets):
-    if lineIdx > 1000000: continue
-    if lineIdx < 600000: continue
+    #if lineIdx > 1000000: continue
+    #if lineIdx < 600000: continue
     print lineIdx, line
     arr = line.strip().split("\t")
     tid = arr[6]
@@ -29,7 +29,7 @@ for lineIdx, line in enumerate(file_tweets):
     hour = time.strftime("%H", dateStr)
     mins = time.strftime("%M", dateStr)
     twStr = str(int(hour))+"_"+str(int(mins))
-    if twStr != "0_0":
+    if twStr != "16_16":
         print "-time no", twStr
     else:
         print "-time yes", twStr

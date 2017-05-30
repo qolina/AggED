@@ -288,6 +288,7 @@ def spam_tweet(text):
 if __name__ == "__main__":
         #chosenTimeWindow = ['0_0', '0_30', '0_40', '1_0', '1_20', '1_40', '2_0', '2_10', '2_20', '2_30', '2_40', '2_50', '3_0', '3_30', '3_50', '4_0', '4_10', '4_40', '4_50', '5_0', '5_20', '5_30', '5_40', '5_50', '6_30', '6_40']
         chosenTimeWindow = ['4_40', '4_50', '5_0', '5_20', '5_30', '5_40', '5_50', '6_30', '6_40']
+
 	file_timeordered_tweets = codecs.open(sys.argv[1], 'r', 'utf-8')
 	time_window_mins = float(sys.argv[2])
 	#file_timeordered_news = codecs.open(sys.argv[3], 'r', 'utf-8')
@@ -354,12 +355,22 @@ if __name__ == "__main__":
 # 			pass
 # 	sys.exit()
 		[tweet_unixtime, tweet_gmttime, tweet_id, text, hashtags, users, urls, media_urls, nfollowers, nfriends] = eval(line)
-                # time filtering 23:00 06-11-2012 - 08:00 07-11-2012
                 dateStr = datetime.fromtimestamp(tweet_unixtime).strftime("%d-%m-%Y")
                 hourStr = datetime.fromtimestamp(tweet_unixtime).strftime("%H")
-                if dateStr not in ["06-11-2012", "07-11-2012"]: continue
-                if dateStr == "06-11-2012" and hourStr != "23": continue
-                if dateStr == "07-11-2012" and int(hourStr) > 8: continue
+                minsStr = datetime.fromtimestamp(tweet_unixtime).strftime("%M")
+
+                #######################
+                # time filtering for USElection 23:00 06-11-2012 - 08:00 07-11-2012
+                #if dateStr not in ["06-11-2012", "07-11-2012"]: continue
+                #if dateStr == "06-11-2012" and hourStr != "23": continue
+                #if dateStr == "07-11-2012" and int(hourStr) > 8: continue
+
+                # time filtering for FA cup 16:10-18:10 05-05-2012
+                if dateStr != "05-05-2012": continue
+                if int(hourStr) not in range(16, 20): continue
+                if hourStr == "16" and int(minsStr) < 10: continue
+                if hourStr == "18" and int(minsStr) > 10: continue
+                #######################
 
 		if spam_tweet(text):
 			continue
@@ -431,8 +442,8 @@ if __name__ == "__main__":
  				#X = vectorizer.fit_transform(articles_corpus + window_corpus)
 
  				#first only cluster tweets
-#				vectorizer = CountVectorizer(tokenizer=custom_tokenize_text, binary=True, min_df=max(int(len(window_corpus)*0.005), 10), ngram_range=(2,3))
-				vectorizer = CountVectorizer(tokenizer=custom_tokenize_text, binary=True, min_df=max(int(len(window_corpus)*0.0025), 10), ngram_range=(2,3))
+				#vectorizer = CountVectorizer(tokenizer=custom_tokenize_text, binary=True, min_df=max(int(len(window_corpus)*0.0025), 10), ngram_range=(2,3)) # original in insight
+				vectorizer = CountVectorizer(tokenizer=custom_tokenize_text, binary=True, min_df=max(int(len(window_corpus)*0.0025), 2), ngram_range=(2,3)) # modif for fa
 
  				X = vectorizer.fit_transform(window_corpus)
  				map_index_after_cleaning = {}
@@ -452,6 +463,19 @@ if __name__ == "__main__":
 				#print "len(window_corpus):", len(window_corpus)
 				print "X.shape:", X.shape
  				print "Xclean.shape:", Xclean.shape
+
+                                #if Xclean.shape[0] < 200: 
+                                #    window_corpus = []
+                                #    tids_window_corpus = []
+                                #    tid_to_urls_window_corpus = {}
+                                #    tid_to_raw_tweet = {}
+                                #    ntweets = 0
+                                #    if t == 4:
+                                #        dfVocTimeWindows = {}
+                                #        t = 0
+                                #    continue
+
+
  				#print map_index_after_cleaning
 				#play with scaling of X
 				X = Xclean
@@ -636,20 +660,38 @@ if __name__ == "__main__":
 			  	print "H.shape:", H.shape
 				vocH = headline_vectorizer.get_feature_names()
 			  	#print "Voc(headline_corpus):", vocH
-				
+
+                                # Added by qinyanxia
+                                if H.shape[0] == 1:  # only one cluster yielded
+
+                                    keywords = orig_headline_corpus[0].lower()
+                                    raw_headline = tid_to_raw_tweet[headline_to_tid[headline_corpus[0]]]
+                                    raw_headline = re.sub('((www\.[^\s]+)|(https?://[^\s]+)|(pic\.twitter\.com/[^\s]+))','', raw_headline)
+                                    raw_headline = raw_headline.encode('utf8', 'replace').replace("\n", ' ').replace("\t", ' ')
+                                    keywords_list = str(sorted(list(set(keywords[:-1].split(",")))))[1:-1].encode('utf8', 'replace').replace('u\'','').replace('\'','')					
+
+                                    fout.write("\n" + str(dtime) + "\t" + raw_headline.decode('utf8', 'ignore') + "\t" + keywords_list.decode('utf8', 'ignore'))
+                                    window_corpus = []
+                                    tids_window_corpus = []
+                                    tid_to_urls_window_corpus = {}
+                                    tid_to_raw_tweet = {}
+                                    ntweets = 0
+                                    if t == 4:
+                                        dfVocTimeWindows = {}
+                                        t = 0
+                                    continue
+
 			  	Hdense = np.matrix(H.todense()).astype('float')
 			  	#Ht = Hdense.T
 			  	#print "Ht.shape:", Ht.shape
 				#Hdense = Ht
-# 			  	distH = pairwise_distances(Hdense, metric='manhattan')
 				distH = pairwise_distances(Hdense, metric='cosine')
-			  	#distHt = pairwise_distances(Ht, metric='manhattan')
 			  	#print distH
 #				print "fastcluster, avg, euclid"
  				HL = fastcluster.linkage(distH, method='average')
 				dtH = 1.0
 				indHL = sch.fcluster(HL, dtH*distH.max(), 'distance')
-#				indHL = sch.fcluster(HL, dtH, 'distance')
+
 				freqHCl = Counter(indHL)
 				print "hclust cut threshold:", dtH
 				print "n_clusters:", len(freqHCl)
@@ -673,7 +715,7 @@ if __name__ == "__main__":
 				print "sorted hcluster_score:"
 		 		print sorted_hclusters
 
-				for hscore, hcl in sorted_hclusters[:10]:
+				for hscore, hcl in sorted_hclusters[:min(10, len(sorted_hclusters))]:
 #					print "\n(cluster, freq):", hcl, freqHCl[hcl]
 	 				hclidx = (npindHL == hcl).nonzero()[0].tolist()
 	 				clean_headline = ''
@@ -717,17 +759,6 @@ if __name__ == "__main__":
 									urls_list.append(tid_to_urls_window_corpus[tid])
 									selected_raw_tweets_set.add(raw_tweet.strip())
 
-					#case of no media urls in tweets, and not enough selected tweets
-# 					for tid in tids_cluster:
-# 						if len(tids_list) < 3 and tid not in tids_set:
-# 							raw_tweet = tid_to_raw_tweet[tid].encode('utf8', 'replace').replace("\n", ' ').replace("\t", ' ')
-# 							raw_tweet = re.sub('((www\.[^\s]+)|(https?://[^\s]+)|(pic\.twitter\.com/[^\s]+))','', raw_tweet)
-#  							raw_tweet = raw_tweet.decode('utf8', 'ignore')
-# 							for tweet in selected_raw_tweets_set:
-# 									fout.write("\nraw_tweet: " + raw_tweet)
-# 									fout.write("\nselected_tweet: " + tweet)
-# 									dist = nltk.metrics.edit_distance(raw_tweet.lower(), tweet.lower())
-# 									fout.write("\ndist: "+ str(dist))														
 					try:	
 						print "\n", clean_headline.decode('utf8', 'ignore')#, "\t", keywords_list
 # 					 	print "\n", raw_headline.decode('utf8', 'ignore')
@@ -735,24 +766,9 @@ if __name__ == "__main__":
 # 						print htid
 # 						print hurl
 					except: pass					
-					
-# 					fout.write("\n\nWindow Starts GMT Time:" + str(dtime) + "\n")
-# 					fout.write("\n\n" + raw_headline.decode('utf8', 'ignore'))
-# 					fout.write("\n" + keywords_list.decode('utf8', 'ignore'))				
-# # 					for tid in tids_list:
-# # 						fout.write("\n"+ tid_to_raw_tweet[tid].encode('utf8', 'replace').replace("\n", ' ').replace("\t", ' ').decode('utf8', 'ignore'))
-# 					fout.write("\n"+ str(tids_list)[1:-1])
-# 					#fout.write("\n" + str(urls_list)[1:-1])
-					urls_set = set()
-					for url_list in urls_list:
-						for url in url_list:
-							urls_set.add(url)
-							#break	
-# 					fout.write("\n" + str(list(urls_set))[1:-1][2:-1])
-					
-					fout.write("\n" + str(dtime) + "\t" + raw_headline.decode('utf8', 'ignore') + "\t" + keywords_list.decode('utf8', 'ignore') + "\t" + str(tids_list)[1:-1] + "\t" + str(list(urls_set))[1:-1][2:-1].replace('\'','').replace('uhttp','http'))
+
+					fout.write("\n" + str(dtime) + "\t" + raw_headline.decode('utf8', 'ignore') + "\t" + keywords_list.decode('utf8', 'ignore'))# + "\t" + str(tids_list)[1:-1] + "\t" + str(list(urls_set))[1:-1][2:-1].replace('\'','').replace('uhttp','http'))
 		
-				#sys.exit()
 				window_corpus = []
 				tids_window_corpus = []
 				tid_to_urls_window_corpus = {}
@@ -762,8 +778,6 @@ if __name__ == "__main__":
 					dfVocTimeWindows = {}
 					t = 0
 
-				#fout.write("\n--------------------start time window tweets--------------------\n")
-				#fout.write(line)
 
 	file_timeordered_tweets.close()
 	fout.close()

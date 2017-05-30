@@ -27,7 +27,8 @@ def parse_simple_text_tweet(line):
     date1 = arr[9][:arr[9].find("2012")+4] # 9:00 AM - 6 Nov 2012 from someplace
     # target format: Tue Feb 25 17:30:00 +0000 2014
     dateTemp = datetime.strptime(date1, "%I:%M %p - %d %b %Y")
-    dateTemp += timedelta(hours=8)
+    #dateTemp += timedelta(hours=8) # for corpus_use
+    dateTemp += timedelta(hours=7) # for corpus_fa
     date2 = dateTemp.strftime("%a %b %d %H:%M:%S %Y")
     #print "-old", date1
     #print dateTemp
